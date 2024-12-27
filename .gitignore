@@ -1,0 +1,12 @@
+# Default ignored files
+/shelf/
+/workspace.xml
+.Rproj.user/
+.Rhistory
+.DS_Store
+.idea/
+data/
+processed_data/
+rosm.cache/
+plots/
+Project_Presentation.pptx
