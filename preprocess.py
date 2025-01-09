@@ -6,20 +6,14 @@ import os
 # Check if Word in "Location" Column occurs in "notes" column
 # Print Number of matches and number of non-matches, return data filtered if matches:
 def check_location_in_notes(data):
-    matches = data[data.apply(lambda x: x["location"] in x["notes"], axis=1)]
-    non_matches = data[~data.apply(lambda x: x["location"] in x["notes"], axis=1)]
+    matches = data[data.apply(lambda x: x["location"].lower() in x["notes"].lower(), axis=1)]
+    non_matches = data[~data.apply(lambda x: x["location"].lower() in x["notes"].lower(), axis=1)]
     print(f"Matches: {len(matches)}")
     print(f"Non-Matches: {len(non_matches)}")
     return matches
 
-# Create a function, which makes all characters in the columns location and notes lowercase:
-def lowercase_columns(data):
-    data["location"] = data["location"].str.lower()
-    data["notes"] = data["notes"].str.lower()
-    return data
 
 def main(data, save_path):
-    data = lowercase_columns(data)
     matches = check_location_in_notes(data)
     matches.to_csv(save_path, index=False)
 

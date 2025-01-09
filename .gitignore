@@ -7,6 +7,9 @@
 .idea/
 data/
 processed_data/
+edgeoparser_output/
+edgeoparser_raw_txt/
+edinburg_geoparser/
 rosm.cache/
 plots/
 Project_Presentation.pptx
