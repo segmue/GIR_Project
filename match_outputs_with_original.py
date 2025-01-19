@@ -10,7 +10,7 @@ EDINBURGH_FILES_EUROPE = 'edgeoparser_output_pre_cleaned/europe.pkl'
 EDINBURGH_FILES_AFRICA = 'edgeoparser_output_pre_cleaned/africa.pkl'
 
 IRCHEL_FILES_EUROPE = 'Europe-Central-Asia_2018-2024_Nov22_' # Add Batch_no and .pkl later
-IRCHEL_FILES_AFRICA = '' # Add Batch_no and .pkl later
+IRCHEL_FILES_AFRICA = 'Africa_1997-2024_Nov29_' # Add Batch_no and .pkl later
 
 ORIGINAL_EUROPE = 'processed_data/Europe-Central-Asia_2018-2024_Nov22.csv'
 ORIGINAL_AFRICA = 'processed_data/Africa_1997-2024_Nov29.csv'
@@ -105,6 +105,7 @@ def main(continent):
     if not os.path.exists(dir):
         os.makedirs(dir)
     res.to_pickle(f"result/{continent}.pkl")
+    print(f"Saved result to {continent}.pkl")
 
 if __name__ == "__main__":
     arg = sys.argv[1] if len(sys.argv) > 1 else 'europe'

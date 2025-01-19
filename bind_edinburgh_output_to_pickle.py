@@ -89,7 +89,7 @@ if __name__ == "__main__":
 
     if len(sys.argv) != 3:
         print("Usage: python script.py <directory> <output_file.pkl>")
-        print("Default Inputs taken: python process_edinburg_output_to_csv.py edgeoparser_output/Europe2 edgeoparser_output_pre_cleaned/europe.pkl")
+        print("Default Inputs taken: python bind_edinburgh_output_to_pickle.py edgeoparser_output/Europe2 edgeoparser_output_pre_cleaned/europe.pkl")
         input_directory = 'edgeoparser_output/Europe2'
         output_file = 'edgeoparser_output_pre_cleaned/europe.pkl'
     else:

@@ -6,10 +6,6 @@ import math
 class Point():
     # initialise
     def __init__(self, x=None, y=None):
-        if len(x) > 1:
-            raise ValueError(f"x should be a single value, is {x}")
-        if len(y) > 1:
-            raise ValueError(f"x should be a single value, is {y}")
         self.x = x
         self.y = y
 

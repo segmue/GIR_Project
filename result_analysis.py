@@ -5,100 +5,147 @@ import numpy as np
 import pandas as pd
 from typing import Literal
 from PointClass import Point
+from tabulate import tabulate
 
 import matplotlib.pyplot as plt
 import seaborn as sns
 
-def plot_error_distribution_boxplots(data):
+def plot_error_distribution_boxplots(europe_data, africa_data):
     """
-    Create horizontal boxplots of error distances for each combination of geoparser (Edinburgh/Irchel)
-    and matching type (Specific/Loosely), with color distinction for matching types.
+    Creates horizontal boxplots for error distances grouped by region (Europe, Africa) and geoparser type.
 
     Parameters:
-    - data: DataFrame containing the resolution distance errors.
+    - europe_data: DataFrame for Europe.
+    - africa_data: DataFrame for Africa.
 
     Returns:
-    - fig: The matplotlib Figure object containing the boxplots.
+    - fig: The matplotlib Figure with the boxplots.
     """
-    import pandas as pd
-
-    # Prepare data for boxplots
     plot_data = []
-    for geoparser, prefix in [("Edinburgh", "edinburgh"), ("Irchel", "irchel")]:
-        for match_type, column_suffix in [("Specific", "distance_error_specific"), ("Loosely", "distance_error_loosly")]:
-            column = f"{prefix}_{column_suffix}"
+
+    for region, data in [("Europe", europe_data), ("Africa", africa_data)]:
+        for geoparser, prefix in [("Edinburgh", "edinburgh"), ("Irchel", "irchel")]:
+            column = f"{prefix}_distance_error"
             if column in data:
                 for value in data[column].dropna():
                     plot_data.append({
+                        "Region": region,
                         "Geoparser": geoparser,
-                        "Matching Type": match_type,
-                        "Error Distance (km)": value / 1000  # Convert to kilometers
+                        "Error Distance (km)": value / 1000,
                     })
 
-    # Convert to DataFrame for plotting
     plot_df = pd.DataFrame(plot_data)
 
-    # Create horizontal boxplots with hue
+    # Create boxplots
     fig, ax = plt.subplots(figsize=(12, 8))
     sns.boxplot(
         data=plot_df,
         x="Error Distance (km)",
-        y="Geoparser",
-        hue="Matching Type",
+        y="Region",
+        hue="Geoparser",
         ax=ax,
-        showfliers=False,  # Exclude outliers for cleaner visualization
-        orient="h"  # Horizontal orientation
+        showfliers=False,
+        orient="h"
     )
-    ax.set_title("Error Distance Distribution by Geoparser and Matching Type")
+    ax.set_title("Error Distance Distribution by Region and Geoparser")
     ax.set_xlabel("Error Distance (km)")
-    ax.set_ylabel("Geoparser")
-    ax.legend(title="Matching Type", loc="upper right")
+    ax.set_ylabel("Region")
     plt.grid(axis="x", linestyle="--", alpha=0.7)
 
     return fig
 
 
-def plot_accuracyATk_barchart(accuracies_at_k, thresholds):
+
+
+
+def plot_accuracyATk_barchart(europe_data, africa_data, thresholds):
     """
-    Create a bar chart of Accuracy@k values for Edinburgh and Irchel and return the plot object.
+    Creates a bar chart for Accuracy@k values using seaborn standard colors for geoparsers
+    and hatching for regions, with bars placed side by side.
 
     Parameters:
-    - accuracies_at_k: Dictionary with accuracy values for both geoparsers (specific and loosely).
-    - thresholds: List of k values used in the calculation.
+    - europe_data: DataFrame for Europe.
+    - africa_data: DataFrame for Africa.
+    - thresholds: List of distance thresholds (k values).
 
     Returns:
-    - fig: The matplotlib Figure object.
+    - fig: The matplotlib Figure with the modified bar chart.
     """
-    import pandas as pd
+    import matplotlib.patches as mpatches
 
-    # Prepare data for plotting
-    data = []
-    for geoparser in ["edinburgh", "irchel"]:
-        for match_type in ["specific", "loosly"]:
+    # Prepare the data
+    plot_data = []
+    for region, data in [("Europe", europe_data), ("Africa", africa_data)]:
+        for geoparser in ["edinburgh", "irchel"]:
+            accuracies = [accuracy_at_k(data, f"{geoparser}_distance_error", k) for k in thresholds]
             for i, threshold in enumerate(thresholds):
-                data.append({
-                    "Geoparser": f"{geoparser.title()} ({match_type.title()})",
-                    "Threshold (km)": threshold / 1000,  # Convert to kilometers
-                    "Accuracy": accuracies_at_k[f"{geoparser}_{match_type}"][i]
+                plot_data.append({
+                    "Region": region,
+                    "Geoparser": geoparser.title(),
+                    "Threshold (km)": threshold / 1000,
+                    "Accuracy": accuracies[i],
                 })
 
-    df = pd.DataFrame(data)
+    plot_df = pd.DataFrame(plot_data)
 
-    # Create the plot
-    fig, ax = plt.subplots(figsize=(12, 6))
-    sns.barplot(
-        data=df,
-        x="Threshold (km)",
-        y="Accuracy",
-        hue="Geoparser",
-        ax=ax
-    )
-    ax.set_title("Accuracy@k Comparison")
+    # Define styles
+    colors = sns.color_palette("deep")[:2]  # Default Seaborn colors: orange, blue
+    hatches = {"Europe": "/", "Africa": None}
+    bar_width = 0.2
+    x_positions = range(len(thresholds))
+
+    # Create the figure
+    fig, ax = plt.subplots(figsize=(14, 8))
+
+    # Plot bars
+    bar_offset = 0  # Offset for adjusting bar positions
+    for region, hatch in hatches.items():
+        for geoparser, color in zip(["Edinburgh", "Irchel"], colors):
+            sub_data = plot_df[(plot_df["Region"] == region) & (plot_df["Geoparser"] == geoparser)]
+            ax.bar(
+                [x + bar_offset for x in x_positions],
+                sub_data["Accuracy"],
+                width=bar_width,
+                color=color,
+                edgecolor="black",
+                hatch=hatch,
+                label=f"{geoparser} ({region})",
+            )
+            bar_offset += bar_width  # Move to the next position for bars
+
+    # Set x-axis
+    ax.set_xticks([x + (bar_width * 1.5) for x in x_positions])  # Center the ticks
+    ax.set_xticklabels([f"{k / 1000} km" for k in thresholds])
     ax.set_xlabel("Distance Threshold (km)")
+
+    # Set y-axis
     ax.set_ylabel("Accuracy")
-    ax.legend(title="Geoparser")
-    ax.grid(axis='y', linestyle='--', alpha=0.7)
+    ax.set_ylim(0, 0.6)
+
+    legend_hatches = {"Europe": "///", "Africa": None}
+
+    # Configure the legend
+    geoparser_patches = [
+        mpatches.Patch(color=color, label=geoparser)
+        for color, geoparser in zip(colors, ["Edinburgh", "Irchel"])
+    ]
+    region_patches = [
+        mpatches.Patch(hatch=hatch, facecolor="white", edgecolor="black", label=region)
+        for region, hatch in legend_hatches.items()
+    ]
+    ax.legend(handles=geoparser_patches + region_patches, loc="upper left")
+
+    # Add title and grid
+    ax.set_title("Accuracy@k by Region and Geoparser (Hatching and Colors)")
+    plt.grid(axis="y", linestyle="--", alpha=0.7)
+
     return fig
+
+
+
+
+
+
 
 
 def accuracy_at_k(data, distance_column, k):
@@ -117,17 +164,42 @@ def accuracy_at_k(data, distance_column, k):
     return within_threshold.sum() / len(data) if len(data) > 0 else 0
 
 
-def calculate_auc(data, distance_column, thresholds):
-    max_threshold = max(thresholds)
-    normalized_thresholds = [t / max_threshold for t in thresholds]
+def calculate_log_auc(data, distance_column):
+    """
+    Calculate the AUC using normalized logarithmic error distances.
 
-    accuracies = [accuracy_at_k(data, distance_column, k) for k in thresholds]
+    Parameters:
+    - data: DataFrame containing distance errors.
+    - distance_column: Column name with the error distances.
 
-    auc = np.trapz(accuracies, normalized_thresholds)
-    return auc, accuracies
+    Returns:
+    - AUC: Area under the curve based on normalized logarithmic error distances.
+    """
+    # Step 1: Logarithmic transformation
+    data['log_distance_error'] = data[distance_column].apply(
+        lambda x: np.log(x + 1) if pd.notnull(x) and x > 0 else None
+    )
+
+    # Step 2: Normalize the log distances
+    log_distances = data['log_distance_error'].dropna()
+    if log_distances.empty:
+        return 0  # Return 0 if there are no valid distances
+
+    min_val, max_val = log_distances.min(), log_distances.max()
+    normalized_distances = (log_distances - min_val) / (max_val - min_val) if max_val > min_val else log_distances
+
+    # Step 3: Sort the errors and compute cumulative probabilities
+    sorted_distances = np.sort(normalized_distances)
+    cumulative_probs = np.linspace(0, 1, len(sorted_distances))
+
+    # Step 4: Calculate AUC using the trapezoidal rule
+    auc = np.trapz(cumulative_probs, sorted_distances)
+
+    return auc
 
 
-def calculate_metrics(data, specific_column, loosly_column, total_column):
+
+def calculate_metrics(data, col, total_column):
     """
     Berechnet Precision, Recall und F1-Score für spezifische und lose Definitionen von NER-Ergebnissen.
 
@@ -140,37 +212,34 @@ def calculate_metrics(data, specific_column, loosly_column, total_column):
     Returns:
     - Dictionary mit Precision, Recall und F1-Score für beide Metriken.
     """
-    results = {}
-    for col, col_name in zip([specific_column, loosly_column], ["Specific", "Loosly"]):
-        true_positive = len(data[data[col].notnull()])  # Korrekt erkannte Ergebnisse
-        total_actual = len(data)  # Alle tatsächlichen Ergebnisse
-        total_predicted = len(data[data[total_column].notnull()])  # Alle Vorhersagen (inkl. falsche)
+    true_positive = len(data[data[col].notnull()])  # Korrekt erkannte Ergebnisse
+    total_actual = len(data)  # Alle tatsächlichen Ergebnisse
+    total_predicted = len(data[data[total_column].notnull()])  # Alle Vorhersagen (inkl. falsche)
 
-        # Precision: Anteil korrekt erkannter unter allen vorhergesagten
-        precision = true_positive / total_predicted if total_predicted > 0 else 0
+    # Precision: Anteil korrekt erkannter unter allen vorhergesagten
+    precision = true_positive / total_predicted if total_predicted > 0 else 0
 
-        # Recall: Anteil korrekt erkannter unter allen tatsächlichen
-        recall = true_positive / total_actual if total_actual > 0 else 0
+    # Recall: Anteil korrekt erkannter unter allen tatsächlichen
+    recall = true_positive / total_actual if total_actual > 0 else 0
 
-        # F1-Score: Harmonie zwischen Precision und Recall
-        f1_score = (2 * precision * recall) / (precision + recall) if (precision + recall) > 0 else 0
+    # F1-Score: Harmonie zwischen Precision und Recall
+    f1_score = (2 * precision * recall) / (precision + recall) if (precision + recall) > 0 else 0
 
-        results[col_name] = {"Precision": precision, "Recall": recall, "F1": f1_score}
+    results = {"Precision": precision, "Recall": recall, "F1": f1_score}
 
     return results
 
 
-def distance_error(row, geoparser: Literal["irchel", "edinburgh"], loosely: bool = False):
-    actual_Point = Point(x = row["longitude"], y = row["latitude"])
+def distance_error(row, geoparser: Literal["irchel", "edinburgh"]):
+    actual_Point = Point(x=row["longitude"], y=row["latitude"])
     if not actual_Point.x or not actual_Point.y:
         return None
 
-    geoparser_dict = row[f"{geoparser}_NER_result_specific"] if not loosely else row[f"{geoparser}_NER_result_loosly"]
+    geoparser_dict = row[f"{geoparser}_NER_result"]
     if geoparser_dict is None:
         return None
 
     recognized_toponym = next(iter(geoparser_dict))
-
 
     pred_lon = geoparser_dict[recognized_toponym]["longitude"]
     pred_lat = geoparser_dict[recognized_toponym]["latitude"]
@@ -180,7 +249,7 @@ def distance_error(row, geoparser: Literal["irchel", "edinburgh"], loosely: bool
     pred_lon = float(pred_lon)
     pred_lat = float(pred_lat)
 
-    pred_Point = Point(x = pred_lon, y = pred_lat)
+    pred_Point = Point(x=pred_lon, y=pred_lat)
     if not pred_Point.x or not pred_Point.y:
         return None
 
@@ -188,8 +257,7 @@ def distance_error(row, geoparser: Literal["irchel", "edinburgh"], loosely: bool
     return dist
 
 
-
-def _match_toponym(row, geoparser: Literal["irchel", "edinburgh"], loosely: bool = False):
+def match_toponym(row, geoparser: Literal["irchel", "edinburgh"]):
     """
     Generalized function to match toponyms based on geoparser data.
     Parameters:
@@ -205,7 +273,7 @@ def _match_toponym(row, geoparser: Literal["irchel", "edinburgh"], loosely: bool
 
         for entry in dict_list:
             for key, value in entry.items():
-                if (loosely and toponym in key.lower()) or (not loosely and toponym == key.lower()):
+                if toponym == key.lower():
                     return {key: value}
         return None
 
@@ -216,7 +284,7 @@ def _match_toponym(row, geoparser: Literal["irchel", "edinburgh"], loosely: bool
 
         for entry in dict_list:
             entry_name = entry["name"].lower()
-            if (loosely and toponym in entry_name) or (not loosely and toponym == entry_name):
+            if toponym == entry_name:
                 latitude = entry['latitude'] if entry['latitude'] != "" else None
                 longitude = entry['longitude'] if entry['longitude'] != "" else None
                 return {
@@ -230,186 +298,138 @@ def _match_toponym(row, geoparser: Literal["irchel", "edinburgh"], loosely: bool
     else:
         raise ValueError(f"Invalid geoparser: {geoparser}")
 
-def get_matched_toponym_specific(row, geoparser: Literal["irchel", "edinburgh"] = "irchel"):
+def summarize_results_to_csv(europe_data, africa_data, metrics_europe, metrics_africa, aucs_europe, aucs_africa, thresholds, output_file):
     """
-    Get exact matches of toponyms from the geoparser data.
+    Erstellt eine zusammengefasste CSV-Datei mit Ergebnissen für Geoparser-Region-Kombinationen.
+
+    Parameter:
+    - europe_data: DataFrame für Europa.
+    - africa_data: DataFrame für Afrika.
+    - metrics_europe: Metriken für Europa (Edinburgh und Irchel).
+    - metrics_africa: Metriken für Afrika (Edinburgh und Irchel).
+    - aucs_europe: AUC-Werte für Europa.
+    - aucs_africa: AUC-Werte für Afrika.
+    - thresholds: Liste der k-Werte.
+    - output_file: Pfad zur CSV-Datei, in die die Ergebnisse geschrieben werden.
     """
-    return _match_toponym(row, geoparser, loosely=False)
+    rows = []
 
-def get_matched_toponym_loosly(row, geoparser: Literal["irchel", "edinburgh"] = "irchel"):
-    """
-    Get loose matches (substring) of toponyms from the geoparser data.
-    """
-    return _match_toponym(row, geoparser, loosely=True)
+    def add_summary_rows(data, metrics, aucs, region):
+        for geoparser in ["edinburgh", "irchel"]:
+            total_rows = len(data)
+            row = {
+                "Geoparser": geoparser.title(),
+                "Region": region,
+                "Total Rows": total_rows,
+                "Rows with Results": len(data[data[f"{geoparser}_geoparser_res"].notnull()]),
+                "Percentage with Results": f"{len(data[data[f'{geoparser}_geoparser_res'].notnull()]) / total_rows * 100:.2f}%",
+                "Correctly recognized Toponyms": len(data[data[f"{geoparser}_NER_result"].notnull()]),
+                "Percentage correctly recognized": f"{len(data[data[f'{geoparser}_NER_result'].notnull()]) / total_rows * 100:.2f}%",
+                "Median Distance Error": f"{np.nanmedian(data[f'{geoparser}_distance_error']):.2f}" if not data[f'{geoparser}_distance_error'].isna().all() else "N/A",
+                "AUC": f"{aucs[geoparser]:.4f}",
+                "Precision": f"{metrics[geoparser]['Precision']:.2f}",
+                "Recall": f"{metrics[geoparser]['Recall']:.2f}",
+                "F1": f"{metrics[geoparser]['F1']:.2f}",
+            }
 
+            # Add Accuracy@k for each threshold
+            for k in thresholds:
+                accuracy = accuracy_at_k(data, f"{geoparser}_distance_error", k)
+                row[f"Accuracy@{k}"] = f"{accuracy:.2f}"
 
+            rows.append(row)
 
-def summarize_results(data, metrics_irchel, metrics_edinburgh, aucs,accuracies_at_k):
-    # Irchel Summary
-    total_rows = len(data)
-    irchel_results = {
-        "Total Rows": total_rows,
-        "Rows with Results": len(data[data["irchel_geoparser_res"].notnull()]),
-        "Percentage with Results": f"{len(data[data['irchel_geoparser_res'].notnull()]) / total_rows * 100:.2f}%",
-        "Rows without Results": len(data[data["irchel_geoparser_res"].isnull()]),
-        "Percentage without Results": f"{len(data[data['irchel_geoparser_res'].isnull()]) / total_rows * 100:.2f}%",
-        "Correctly recognized Toponyms (Specific)": len(data[data["irchel_NER_result_specific"].notnull()]),
-        "Correctly recognized Toponyms (Loosly)": len(data[data["irchel_NER_result_loosly"].notnull()]),
-        "Percentage correctly recognized (Specific)": f"{len(data[data['irchel_NER_result_specific'].notnull()]) / total_rows * 100:.2f}%",
-        "Percentage correctly recognized (Loosly)": f"{len(data[data['irchel_NER_result_loosly'].notnull()]) / total_rows * 100:.2f}%",
-        "Median Distance Error (Specific)": f"{np.nanmedian(data['irchel_distance_error_specific']):.2f}" if not data['irchel_distance_error_specific'].isna().all() else "N/A",
-        "Median Distance Error (Loosly)": f"{np.nanmedian(data['irchel_distance_error_loosly']):.2f}" if not data['irchel_distance_error_loosly'].isna().all() else "N/A",
-        "AUC (Specific)": f"{aucs['irchel_specific']:.4f}",
-        "AUC (Loosly)": f"{aucs['irchel_loosly']:.4f}",
-        "Accuracy@1000 (Specific)": f"{accuracies_at_k['irchel_specific'][0]:.2f}",
-        "Accuracy@5000 (Specific)": f"{accuracies_at_k['irchel_specific'][1]:.2f}",
-        "Accuracy@10000 (Specific)": f"{accuracies_at_k['irchel_specific'][2]:.2f}",
-        "Accuracy@50000 (Specific)": f"{accuracies_at_k['irchel_specific'][3]:.2f}",
-        "Accuracy@100000 (Specific)": f"{accuracies_at_k['irchel_specific'][4]:.2f}",
-        "Accuracy@161000 (Specific)": f"{accuracies_at_k['irchel_specific'][5]:.2f}",
-        "Accuracy@1000 (Loosly)": f"{accuracies_at_k['irchel_loosly'][0]:.2f}",
-        "Accuracy@5000 (Loosly)": f"{accuracies_at_k['irchel_loosly'][1]:.2f}",
-        "Accuracy@10000 (Loosly)": f"{accuracies_at_k['irchel_loosly'][2]:.2f}",
-        "Accuracy@50000 (Loosly)": f"{accuracies_at_k['irchel_loosly'][3]:.2f}",
-        "Accuracy@100000 (Loosly)": f"{accuracies_at_k['irchel_loosly'][4]:.2f}",
-        "Accuracy@161000 (Loosly)": f"{accuracies_at_k['irchel_loosly'][5]:.2f}",
-        "Precision (Specific)": f"{metrics_irchel['Specific']['Precision']:.2f}",
-        "Recall (Specific)": f"{metrics_irchel['Specific']['Recall']:.2f}",
-        "F1 (Specific)": f"{metrics_irchel['Specific']['F1']:.2f}",
-        "Precision (Loosly)": f"{metrics_irchel['Loosly']['Precision']:.2f}",
-        "Recall (Loosly)": f"{metrics_irchel['Loosly']['Recall']:.2f}",
-        "F1 (Loosly)": f"{metrics_irchel['Loosly']['F1']:.2f}",
+    # Add summaries for Europe and Africa
+    add_summary_rows(europe_data, metrics_europe, aucs_europe, "Europe")
+    add_summary_rows(africa_data, metrics_africa, aucs_africa, "Africa")
+
+    # Convert rows to DataFrame and save as CSV
+    summary_df = pd.DataFrame(rows)
+    summary_df.to_csv(output_file, index=False)
+
+    return summary_df
+
+def main(europe_file, africa_file, output_dir):
+    # Dateien laden
+    europe_data = pd.read_pickle(europe_file)
+    africa_data = pd.read_pickle(africa_file)
+
+    # NER-Ergebnisse bereinigen
+    for data in [europe_data, africa_data]:
+        data['edinburgh_geoparser_res'] = data['edinburgh_geoparser_res'].apply(lambda x: None if isinstance(x, list) and len(x) == 0 else x)
+        data['edinburgh_geoparser_res'] = data['edinburgh_geoparser_res'].apply(lambda x: None if x == -1 else x)
+        data['irchel_geoparser_res'] = data['irchel_geoparser_res'].apply(lambda x: None if isinstance(x, list) and len(x) == 0 else x)
+        data['irchel_geoparser_res'] = data['irchel_geoparser_res'].apply(lambda x: None if x == -1 else x)
+
+    # NER Matching anwenden
+    for name, data in [("Europe", europe_data), ("Africa", africa_data)]:
+        data["edinburgh_NER_result"] = data.apply(lambda x: match_toponym(x, "edinburgh"), axis=1)
+        data["irchel_NER_result"] = data.apply(lambda x: match_toponym(x, "irchel"), axis=1)
+
+    # Metriken berechnen
+    metrics_europe = {
+        "edinburgh": calculate_metrics(europe_data, col="edinburgh_NER_result", total_column="edinburgh_geoparser_res"),
+        "irchel": calculate_metrics(europe_data, col="irchel_NER_result", total_column="irchel_geoparser_res"),
     }
-    irchel_summary = pd.DataFrame([irchel_results])
 
-    # Edinburgh Summary
-    edinburgh_results = {
-        "Total Rows": total_rows,
-        "Rows with Results": len(data[data["edinburgh_geoparser_res"].notnull()]),
-        "Percentage with Results": f"{len(data[data['edinburgh_geoparser_res'].notnull()]) / total_rows * 100:.2f}%",
-        "Rows without Results": len(data[data["edinburgh_geoparser_res"].isnull()]),
-        "Percentage without Results": f"{len(data[data['edinburgh_geoparser_res'].isnull()]) / total_rows * 100:.2f}%",
-        "Correctly recognized Toponyms (Specific)": len(data[data["edinburgh_NER_result_specific"].notnull()]),
-        "Correctly recognized Toponyms (Loosly)": len(data[data["edinburgh_NER_result_loosly"].notnull()]),
-        "Percentage correctly recognized (Specific)": f"{len(data[data['edinburgh_NER_result_specific'].notnull()]) / total_rows * 100:.2f}%",
-        "Percentage correctly recognized (Loosly)": f"{len(data[data['edinburgh_NER_result_loosly'].notnull()]) / total_rows * 100:.2f}%",
-        "Median Distance Error (Specific)": f"{np.nanmedian(data['edinburgh_distance_error_specific']):.2f}" if not data['edinburgh_distance_error_specific'].isna().all() else "N/A",
-        "Median Distance Error (Loosly)": f"{np.nanmedian(data['edinburgh_distance_error_loosly']):.2f}" if not data['edinburgh_distance_error_loosly'].isna().all() else "N/A",
-        "AUC (Specific)": f"{aucs['edinburgh_specific']:.4f}",
-        "AUC (Loosly)": f"{aucs['edinburgh_loosly']:.4f}",
-        "Accuracy@1000 (Specific)": f"{accuracies_at_k['edinburgh_specific'][0]:.2f}",
-        "Accuracy@5000 (Specific)": f"{accuracies_at_k['edinburgh_specific'][1]:.2f}",
-        "Accuracy@10000 (Specific)": f"{accuracies_at_k['edinburgh_specific'][2]:.2f}",
-        "Accuracy@50000 (Specific)": f"{accuracies_at_k['edinburgh_specific'][3]:.2f}",
-        "Accuracy@100000 (Specific)": f"{accuracies_at_k['edinburgh_specific'][4]:.2f}",
-        "Accuracy@161000 (Specific)": f"{accuracies_at_k['edinburgh_specific'][5]:.2f}",
-        "Accuracy@1000 (Loosly)": f"{accuracies_at_k['edinburgh_loosly'][0]:.2f}",
-        "Accuracy@5000 (Loosly)": f"{accuracies_at_k['edinburgh_loosly'][1]:.2f}",
-        "Accuracy@10000 (Loosly)": f"{accuracies_at_k['edinburgh_loosly'][2]:.2f}",
-        "Accuracy@50000 (Loosly)": f"{accuracies_at_k['edinburgh_loosly'][3]:.2f}",
-        "Accuracy@100000 (Loosly)": f"{accuracies_at_k['edinburgh_loosly'][4]:.2f}",
-        "Accuracy@161000 (Loosly)": f"{accuracies_at_k['edinburgh_loosly'][5]:.2f}",
-        "Precision (Specific)": f"{metrics_edinburgh['Specific']['Precision']:.2f}",
-        "Recall (Specific)": f"{metrics_edinburgh['Specific']['Recall']:.2f}",
-        "F1 (Specific)": f"{metrics_edinburgh['Specific']['F1']:.2f}",
-        "Precision (Loosly)": f"{metrics_edinburgh['Loosly']['Precision']:.2f}",
-        "Recall (Loosly)": f"{metrics_edinburgh['Loosly']['Recall']:.2f}",
-        "F1 (Loosly)": f"{metrics_edinburgh['Loosly']['F1']:.2f}",
+    metrics_africa = {
+        "edinburgh": calculate_metrics(africa_data, col="edinburgh_NER_result", total_column="edinburgh_geoparser_res"),
+        "irchel": calculate_metrics(africa_data, col="irchel_NER_result", total_column="irchel_geoparser_res"),
     }
-    edinburgh_summary = pd.DataFrame([edinburgh_results])
 
-    return {"Irchel Geoparser": irchel_summary, "Edinburgh Geoparser": edinburgh_summary}
+    # Distance Errors berechnen
+    for name, data in [("Europe", europe_data), ("Africa", africa_data)]:
+        data["edinburgh_distance_error"] = data.apply(lambda x: distance_error(x, "edinburgh"), axis=1)
+        data["irchel_distance_error"] = data.apply(lambda x: distance_error(x, "irchel"), axis=1)
 
-
-def main(output_file, output_dir):
-    data = pd.read_pickle(output_file)
-    data['edinburgh_geoparser_res'] = data['edinburgh_geoparser_res'].apply(lambda x: None if isinstance(x, list) and len(x) == 0 else x)
-    data['irchel_geoparser_res'] = data['irchel_geoparser_res'].apply(lambda x: None if isinstance(x, list) and len(x) == 0 else x)
-
-    # Step 1: Apply NER Matching
-    data["edinburgh_NER_result_specific"] = data.apply(lambda x: get_matched_toponym_specific(x, "edinburgh"), axis=1)
-    data["edinburgh_NER_result_loosly"] = data.apply(lambda x: get_matched_toponym_loosly(x, "edinburgh"), axis=1)
-    data["irchel_NER_result_specific"] = data.apply(lambda x: get_matched_toponym_specific(x, "irchel"), axis=1)
-    data["irchel_NER_result_loosly"] = data.apply(lambda x: get_matched_toponym_loosly(x, "irchel"), axis=1)
-
-    # Step 2: Calculate Metrics
-    metrics_edinburgh = calculate_metrics(
-        data,
-        specific_column="edinburgh_NER_result_specific",
-        loosly_column="edinburgh_NER_result_loosly",
-        total_column="edinburgh_geoparser_res"
-    )
-
-    metrics_irchel = calculate_metrics(
-        data,
-        specific_column="irchel_NER_result_specific",
-        loosly_column="irchel_NER_result_loosly",
-        total_column="irchel_geoparser_res"
-    )
-
-    # Step 3: Calculate Distance Errors
+    # AUC und Accuracy@k berechnen
     thresholds = [1000, 5000, 10000, 50_000, 100_000, 161000, 500000]
-    data["edinburgh_distance_error_specific"] = data.apply(lambda x: distance_error(x, "edinburgh"), axis=1)
-    data["irchel_distance_error_specific"] = data.apply(lambda x: distance_error(x, "irchel"), axis=1)
-    data["edinburgh_distance_error_loosly"] = data.apply(lambda x: distance_error(x, "edinburgh", loosely=True), axis=1)
-    data["irchel_distance_error_loosly"] = data.apply(lambda x: distance_error(x, "irchel", loosely=True), axis=1)
+    aucs_europe = {
+        "edinburgh": calculate_log_auc(europe_data, "edinburgh_distance_error"),
+        "irchel": calculate_log_auc(europe_data, "irchel_distance_error"),
+    }
+    aucs_africa = {
+        "edinburgh": calculate_log_auc(africa_data, "edinburgh_distance_error"),
+        "irchel": calculate_log_auc(africa_data, "irchel_distance_error"),
+    }
 
-    # Step 4: Calculate AUC
-    edinburgh_auc_specific, edinburgh_accuracies_specific = calculate_auc(data, "edinburgh_distance_error_specific", thresholds)
-    edinburgh_auc_loosly, edinburgh_accuracies_loosly = calculate_auc(data, "edinburgh_distance_error_loosly", thresholds)
-    irchel_auc_specific, irchel_accuracies_specific = calculate_auc(data, "irchel_distance_error_specific", thresholds)
-    irchel_auc_loosly, irchel_accuracies_loosly = calculate_auc(data, "irchel_distance_error_loosly", thresholds)
-
-    # Step 5: Summarize Results
-    summary_df = summarize_results(
-        data,
-        metrics_irchel,
-        metrics_edinburgh,
-        aucs={
-            "edinburgh_specific": edinburgh_auc_specific,
-            "edinburgh_loosly": edinburgh_auc_loosly,
-            "irchel_specific": irchel_auc_specific,
-            "irchel_loosly": irchel_auc_loosly
-        },
-        accuracies_at_k={
-            "edinburgh_specific": edinburgh_accuracies_specific,
-            "edinburgh_loosly": edinburgh_accuracies_loosly,
-            "irchel_specific": irchel_accuracies_specific,
-            "irchel_loosly": irchel_accuracies_loosly
-        }
+    output_csv = os.path.join(output_dir, "geoparser_summary.csv")
+    summary_df = summarize_results_to_csv(
+        europe_data,
+        africa_data,
+        metrics_europe,
+        metrics_africa,
+        aucs_europe,
+        aucs_africa,
+        thresholds,
+        output_csv
     )
-    for name, df in summary_df.items():
-        print(f"Summary for {name}:")
-        for col in df.columns:
-            print(f"{col}: {df[col].values[0]}")
 
-    # Step 6: Plot and Save
-        plots = {
-            "Error Distance Boxplots": plot_error_distribution_boxplots(data),
-            "Accuracy@k Comparison": plot_accuracyATk_barchart(
-                {
-                    "edinburgh_specific": edinburgh_accuracies_specific,
-                    "edinburgh_loosly": edinburgh_accuracies_loosly,
-                    "irchel_specific": irchel_accuracies_specific,
-                    "irchel_loosly": irchel_accuracies_loosly,
-                },
-                thresholds
-            )
-        }
+    # Plots erstellen und speichern
+    plots = {
+        "Error Distance Boxplots": plot_error_distribution_boxplots(europe_data, africa_data),
+        "Accuracy@k Comparison": plot_accuracyATk_barchart(europe_data, africa_data, thresholds),
+    }
+    for name, fig in plots.items():
+        fig.savefig(os.path.join(output_dir, f"{name.replace(' ', '_').lower()}.pdf"), bbox_inches='tight')
+        plt.close(fig)
 
-        for name, fig in plots.items():
-            fig.savefig(os.path.join(output_dir, f"{name.replace(' ', '_').lower()}.pdf"), bbox_inches='tight')
-            plt.close(fig)
+    print(tabulate(summary_df, headers='keys', tablefmt='fancy_grid', showindex=False))
 
+    print(f"Results saved to: {output_csv}")
 
 if __name__ == "__main__":
-    if len(sys.argv) < 2:
-        print("Usage: python result_analysis.py <output.pkl> <output_dir>")
-        print("Default Inputs taken: python result_analysis.py result/europe.pkl result/europe")
-        output_file = "result/europe.pkl"
+    if len(sys.argv) < 3:
+        print("Usage: python result_analysis.py <europe.pkl> <africa.pkl> <output_dir>")
+        print("Default Inputs taken: python result_analysis.py result/europe.pkl result/africa.pkl result/")
+        europe_file = "result/europe.pkl"
+        africa_file = "result/africa.pkl"
     else:
-        output_file = sys.argv[1]
+        europe_file = sys.argv[1]
+        africa_file = sys.argv[2]
 
-    output_dir = sys.argv[2] if len(sys.argv) > 2 else output_file.replace(".pkl", "")
+    output_dir = sys.argv[3] if len(sys.argv) > 3 else "result/"
+    if not os.path.exists(output_dir):
+        os.makedirs(output_dir)
 
-    main(output_file, output_dir)
+    main(europe_file, africa_file, output_dir)
