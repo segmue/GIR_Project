@@ -367,6 +367,9 @@ def summarize_results_to_csv(europe_data, africa_data, metrics_europe, metrics_a
     rows = []
 
     def add_summary_rows(data, metrics, aucs, region):
+        mcnemar_result = perform_mcnemars_test(data, geoparser_a="edinburgh", geoparser_b="irchel")
+        wilcoxon_result = perform_wilcoxon_test(data, geoparser_a="edinburgh", geoparser_b="irchel")
+
         for geoparser in ["edinburgh", "irchel"]:
             total_rows = len(data)
             row = {
@@ -389,6 +392,12 @@ def summarize_results_to_csv(europe_data, africa_data, metrics_europe, metrics_a
             for k in thresholds:
                 accuracy = accuracy_at_k(data, f"{geoparser}_distance_error", k)
                 row[f"Accuracy@{k}"] = f"{accuracy:.2f}"
+
+            if geoparser == "edinburgh":  # Nur einmal hinzufügen, um Redundanz zu vermeiden
+                row["McNemar Test Statistic"] = mcnemar_result["Test Statistic"]
+                row["McNemar p-value"] = mcnemar_result["p-value"]
+                row["Wilcoxon Test Statistic"] = wilcoxon_result["Test Statistic"]
+                row["Wilcoxon p-value"] = wilcoxon_result["p-value"]
 
             rows.append(row)
 
@@ -445,6 +454,20 @@ def main(europe_file, africa_file, output_dir):
         "edinburgh": calculate_log_auc(africa_data, "edinburgh_distance_error"),
         "irchel": calculate_log_auc(africa_data, "irchel_distance_error"),
     }
+
+    # Statistische Tests durchführen
+    # McNemar's Test
+    mcnemar_europe = perform_mcnemars_test(europe_data, geoparser_a="edinburgh", geoparser_b="irchel")
+    mcnemar_africa = perform_mcnemars_test(africa_data, geoparser_a="edinburgh", geoparser_b="irchel")
+    print(f"McNemar's Test Europe: {mcnemar_europe}")
+    print(f"McNemar's Test Africa: {mcnemar_africa}")
+
+    # Wilcoxon Signed-Rank Test
+    wilcoxon_europe = perform_wilcoxon_test(europe_data, geoparser_a="edinburgh", geoparser_b="irchel")
+    wilcoxon_africa = perform_wilcoxon_test(africa_data, geoparser_a="edinburgh", geoparser_b="irchel")
+    print(f"Wilcoxon Signed-Rank Test Europe: {wilcoxon_europe}")
+    print(f"Wilcoxon Signed-Rank Test Africa: {wilcoxon_africa}")
+
 
     output_csv = os.path.join(output_dir, "geoparser_summary.csv")
     summary_df = summarize_results_to_csv(
