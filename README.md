@@ -1,25 +1,42 @@
-
 # GIR Projekt
 
-### Preprocessing
-- Entfernt alle Einträge, deren "Location" nicht im Rohtext vorkommt (Meinstens aufgrund unterschiedlicher Schreibweise)
-- Script: preprocess.py
+Dieses Projekt entstand im Rahmen des Moduls GEO871 Geographic Information Retrieval (HS2024).
 
-- Erstellt aus jedem Eintrag ein einzelnes .txt File (Inputformat für edinburg geoparser)
-- Script: create_raw_txt_files_for_edgeoparser.py
+## Projektbeschreibung
+Das Ziel dieses Projekts ist die Evaluierung und Analyse von Geoparsing-Methoden, um Ortsreferenzen aus unstrukturiertem Text zu extrahieren und aufzulösen. Der Workflow umfasst die Vorverarbeitung von Rohdaten, die Anwendung verschiedener Geoparser, die Harmonisierung der Ergebnisse und die anschließende Auswertung anhand definierter Metriken.
 
-### Edinburgh Geoparser
-- Für jedes einzelne File im Unterordner (aufgeteilt in Batches), run Geoparser Pipeline, speichere Stdout als .out.xml file:
-- script: ./run-multiple-files.sh
+**[Link zum Paper](GEO871_Sebastian_Gmür.pdf)**
 
-#### Post-Processing:
-- Einlesen jedes Output-Files in ein Pickle Data Format:
-- script: process_edinburgh_output_to_pkl.py
+## Ordner-Struktur
+- **data**: Heruntergeladene ACLED-Daten.
+- **data_preprocessed**: Bereinigte ACLED-Daten für Geoparsing.
+- **edgeoparser_raw_txt**: Einzelne .txt-Dateien als Eingabeformat für den Edinburgh Geoparser.
+- **edgeoparser_output**: Einzelne .xml-Ausgabedateien des Edinburgh Geoparsers.
+- **edgeoparser_output_pre_cleaned**: Zusammengeführte Pandas-Pickle-Dateien der .xml-Ausgaben pro Region.
+- **irchel_geoparser_output**: Pickle-Dateien der Batch-Verarbeitung des Irchel Geoparsers.
+- **result**: Harmonisierte Pickle-Dateien der Geoparser-Ausgaben und der Ground Truth, inklusive Zusammenfassungsstatistiken.
 
-### Datenaufbereitung für Analyse
-- Liest Edinburg Output ein, Irchel Geoparser Output (kopiert von Google Drive) und Rohdaten und erstellt Dataframe für Auswertung
-- script: match_outputs_with_original.py
+## Preprocessing
+1. Entfernt Einträge, deren "Location" nicht im Rohtext vorkommt (meistens wegen unterschiedlicher Schreibweisen).
+   - **Script**: `preprocess.py`
+2. Erstellt aus jedem Eintrag eine einzelne .txt-Datei (Eingabeformat für den Edinburgh Geoparser).
+   - **Script**: `create_raw_txt_files_for_edgeoparser.py`
 
-### Auswertung
+## Edinburgh Geoparser
+1. Anwendung der Geoparser-Pipeline auf jedes einzelne File im Batch-Ordner. Speichert die Stdout-Ausgabe als `.out.xml`.
+   - **Originaler Geoparser-Code**: [Edinburgh Geoparser](https://www.ltg.ed.ac.uk/software/geoparser/)
+   - **Script**: `./run-multiple-files.sh`
+2. Konvertiert die Output-Dateien in das Pickle-Datenformat.
+   - **Script**: `process_edinburgh_output_to_pkl.py`
 
--scripts: result_analysis.py
+## Irchel Geoparser
+- Google Colab Notebook, das ACLED-Rohdaten von Google Drive mountet, in Batch-Größen von 10.000 Einträgen verarbeitet und die Ergebnisse wieder auf Drive speichert.
+  - **Notebook**: `Irchel_Geoparser_ACLED.ipynb`
+
+## Datenaufbereitung für Analyse
+- Liest die Ausgaben des Edinburgh Geoparsers, des Irchel Geoparsers und die Rohdaten ein. Erstellt einen harmonisierten DataFrame für die Auswertung.
+  - **Script**: `match_outputs_with_original.py`
+
+## Auswertung
+- Berechnet verschiedene Metriken (siehe Paper), speichert diese als .csv und erstellt Grafiken.
+  - **Script**: `result_analysis.py`
