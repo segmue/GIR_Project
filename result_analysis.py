@@ -10,6 +10,62 @@ from tabulate import tabulate
 import matplotlib.pyplot as plt
 import seaborn as sns
 
+from statsmodels.stats.contingency_tables import mcnemar
+from scipy.stats import wilcoxon
+
+
+def perform_mcnemars_test(data, geoparser_a, geoparser_b):
+    """
+    Führt McNemar's Test für zwei Geotagging-Modelle durch.
+
+    Parameters:
+    - data: DataFrame mit den Ergebnissen.
+    - geoparser_a: Präfix des ersten Geoparsers (z. B. 'edinburgh').
+    - geoparser_b: Präfix des zweiten Geoparsers (z. B. 'irchel').
+
+    Returns:
+    - dict mit Teststatistik und p-Wert.
+    """
+    # Kontingenztabelle basierend auf den Erkennungsergebnissen
+    n_00 = len(data[(data[f"{geoparser_a}_NER_result"].isnull()) & (data[f"{geoparser_b}_NER_result"].isnull())])
+    n_01 = len(data[(data[f"{geoparser_a}_NER_result"].isnull()) & (data[f"{geoparser_b}_NER_result"].notnull())])
+    n_10 = len(data[(data[f"{geoparser_a}_NER_result"].notnull()) & (data[f"{geoparser_b}_NER_result"].isnull())])
+    n_11 = len(data[(data[f"{geoparser_a}_NER_result"].notnull()) & (data[f"{geoparser_b}_NER_result"].notnull())])
+
+    table = [[n_00, n_01], [n_10, n_11]]
+
+    # McNemar's Test durchführen
+    result = mcnemar(table, exact=True)
+
+    return {"Test Statistic": result.statistic, "p-value": result.pvalue}
+
+
+
+def perform_wilcoxon_test(data, geoparser_a, geoparser_b):
+    """
+    Führt den Wilcoxon Signed-Rank Test für zwei Modelle basierend auf den Fehlerdistanzen durch.
+
+    Parameters:
+    - data: DataFrame mit den Fehlerdistanzen beider Modelle.
+    - geoparser_a: Präfix des ersten Geoparsers (z. B. 'edinburgh').
+    - geoparser_b: Präfix des zweiten Geoparsers (z. B. 'irchel').
+
+    Returns:
+    - dict mit Teststatistik und p-Wert.
+    """
+    # Fehlerdistanzen auswählen und NaN-Werte entfernen
+    errors_a = data[f"{geoparser_a}_distance_error"].dropna()
+    errors_b = data[f"{geoparser_b}_distance_error"].dropna()
+
+    # Gemeinsame Indizes auswählen
+    common_indices = errors_a.index.intersection(errors_b.index)
+
+    # Wilcoxon-Test durchführen
+    stat, p = wilcoxon(errors_a[common_indices], errors_b[common_indices])
+
+    return {"Test Statistic": stat, "p-value": p}
+
+
 def plot_error_distribution_boxplots(europe_data, africa_data):
     """
     Creates horizontal boxplots for error distances grouped by region (Europe, Africa) and geoparser type.
@@ -166,7 +222,7 @@ def accuracy_at_k(data, distance_column, k):
 
 def calculate_log_auc(data, distance_column):
     """
-    Calculate the AUC using normalized logarithmic error distances.
+    Calculate AUC using the discrete approximation of the integral.
 
     Parameters:
     - data: DataFrame containing distance errors.
@@ -175,27 +231,23 @@ def calculate_log_auc(data, distance_column):
     Returns:
     - AUC: Area under the curve based on normalized logarithmic error distances.
     """
-    # Step 1: Logarithmic transformation
+    # Maximum logarithmic error based on the Earth's half-circumference
+    max_log_error = np.log(20039)
+
+    # Logarithmic transformation and normalization
     data['log_distance_error'] = data[distance_column].apply(
-        lambda x: np.log(x + 1) if pd.notnull(x) and x > 0 else None
+        lambda x: np.log(x + 1) if pd.notnull(x) and x >= 0 else None
     )
+    data['normalized_log_error'] = data['log_distance_error'] / max_log_error
 
-    # Step 2: Normalize the log distances
-    log_distances = data['log_distance_error'].dropna()
-    if log_distances.empty:
-        return 0  # Return 0 if there are no valid distances
+    # Drop NaN values (invalid or missing distances)
+    normalized_errors = data['normalized_log_error'].dropna()
 
-    min_val, max_val = log_distances.min(), log_distances.max()
-    normalized_distances = (log_distances - min_val) / (max_val - min_val) if max_val > min_val else log_distances
-
-    # Step 3: Sort the errors and compute cumulative probabilities
-    sorted_distances = np.sort(normalized_distances)
-    cumulative_probs = np.linspace(0, 1, len(sorted_distances))
-
-    # Step 4: Calculate AUC using the trapezoidal rule
-    auc = np.trapz(cumulative_probs, sorted_distances)
+    # Calculate the AUC as the average of normalized logarithmic errors
+    auc = normalized_errors.mean() if not normalized_errors.empty else 0
 
     return auc
+
 
 
 
@@ -326,6 +378,7 @@ def summarize_results_to_csv(europe_data, africa_data, metrics_europe, metrics_a
                 "Correctly recognized Toponyms": len(data[data[f"{geoparser}_NER_result"].notnull()]),
                 "Percentage correctly recognized": f"{len(data[data[f'{geoparser}_NER_result'].notnull()]) / total_rows * 100:.2f}%",
                 "Median Distance Error": f"{np.nanmedian(data[f'{geoparser}_distance_error']):.2f}" if not data[f'{geoparser}_distance_error'].isna().all() else "N/A",
+                "Mean Distance Error": f"{np.nanmean(data[f'{geoparser}_distance_error']):.2f}" if not data[f'{geoparser}_distance_error'].isna().all() else "N/A",
                 "AUC": f"{aucs[geoparser]:.4f}",
                 "Precision": f"{metrics[geoparser]['Precision']:.2f}",
                 "Recall": f"{metrics[geoparser]['Recall']:.2f}",
