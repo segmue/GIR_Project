@@ -12,11 +12,10 @@ edgeoparser_raw_txt/
 edinburg_geoparser/
 rosm.cache/
 plots/
-Project_Presentation.pptx
 irchel_geoparser_output/
 edgeoparser_output_pre_cleaned/
-interim-layout.docx
 result/
 poetry.lock
-~$interim-layout.docx
-~$terim-layout.docx
+*.pdf
+*.pptx
+*.docx
